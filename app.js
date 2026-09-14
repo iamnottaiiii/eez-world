@@ -1710,6 +1710,20 @@ async function ghApi(path, opts){
     var meT = await requireMe();
     return await ghThreadData(threadM[1], meT, true);
   }
+  if(threadM && method === 'DELETE'){
+    var meD = await requireMe();
+    var cidD = threadM[1];
+    var convosD = await getConvos();
+    var cd = convosD.find(function(x){ return x.id === cidD; });
+    if(!cd || !convoParty(cd, meD.id)) throw bad('not found', 404);
+    await Promise.all([
+      mutateJson('conversations.json', function(cs){ return cs.filter(function(x){ return x.id !== cidD; }); }, 'eez: delete conversation'),
+      mutateJson('messages.json', function(ms){ return ms.filter(function(x){ return x.conversation_id !== cidD; }); }, 'eez: delete conversation'),
+      mutateJson('conversation_prefs.json', function(ps){ return ps.filter(function(x){ return x.conversation_id !== cidD; }); }, 'eez: delete conversation'),
+      mutateJson('feed.json', function(fs){ return fs.filter(function(x){ return x.ref_id !== cidD; }); }, 'eez: delete conversation')
+    ]);
+    return {};
+  }
   var msgM = /^\/api\/conversations\/([^/]+)\/messages$/.exec(p);
   if(msgM && method === 'POST'){
     var meM = await requireMe();
@@ -4051,6 +4065,7 @@ var lastSendAt = 0;
           </span>
         </label>
         <p class="settings-note">Mute hides alerts and unread badges for this chat. Receipts are on by default.</p>
+        <button type="button" class="btn danger" id="delete-chat">delete conversation</button>
       </div>
       <div class="thread-scroll" id="thread-scroll">
         <div class="thread">${msgs || `<p class="empty">no messages yet</p>`}</div>
@@ -4148,6 +4163,23 @@ var lastSendAt = 0;
           else renameBtn.textContent = convo.weekly_title || substanceLabel(convo.other_ask, 42) || "conversation";
           showToast("renamed");
         } catch (err) {
+          alert(err.message);
+        }
+      });
+    }
+    const delBtn = document.getElementById("delete-chat");
+    if (delBtn) {
+      delBtn.addEventListener("click", async () => {
+        const ok = confirm("Delete this conversation for everyone? This cannot be undone.");
+        if (!ok) return;
+        const restore = btnBusy(delBtn, "deleting…");
+        try {
+          await api(`/api/conversations/${id}`, { method: "DELETE" });
+          closeRealtime("thread");
+          showToast("conversation deleted");
+          location.hash = "#/messages";
+        } catch (err) {
+          restore();
           alert(err.message);
         }
       });
