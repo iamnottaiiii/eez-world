@@ -590,6 +590,11 @@ h2 {
   background: var(--well-focus);
 }
 
+.answer-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .ambient-row {
   display: flex;
   align-items: center;
@@ -2658,6 +2663,7 @@ body.page-home .app { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscrol
   position: absolute;
   top: 8px;
   right: 12px;
+  z-index: 2;
   appearance: none;
   border: 0;
   background: transparent;
