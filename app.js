@@ -8,7 +8,7 @@
   const INSTALL_KEY = "eez_install_dismissed_at";
   const SHARE_KEY = "eez_share_nudge_at";
   const SAFETY_KEY = "eez_safety_tip_seen";
-  const SHARE_URL = "https://eez.world";
+  const SHARE_URL = "https://bjvfi.com/eez";
   const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
 
   const HISTORY_MAX = 12;
@@ -106,12 +106,25 @@
     realtime[slot] = null;
   }
 
+  function seenMessageIds() {
+    const ids = new Set();
+    const scroller = document.getElementById("thread-scroll");
+    const thread = scroller && scroller.querySelector(".thread");
+    if (thread) {
+      thread.querySelectorAll(".bubble[data-mid]").forEach((el) => {
+        const mid = el.getAttribute("data-mid");
+        if (mid != null) ids.add(String(mid));
+      });
+    }
+    return ids;
+  }
+
   function appendLiveMessage(msg) {
     if (!msg || !msg.id) return false;
     const scroller = document.getElementById("thread-scroll");
     const thread = scroller && scroller.querySelector(".thread");
     if (!thread) return false;
-    if (seenMessageIds().has(msg.id)) return false;
+    if (seenMessageIds().has(String(msg.id))) return false;
     const empty = thread.querySelector(".empty");
     if (empty) empty.remove();
 
@@ -1276,17 +1289,6 @@ var WEEKLY_SHAPES = ["circle", "square", "triangle", "diamond", "hexagon", "star
 function cohortOf(identity, weekId){
   return hashStr(String(identity) + "|" + weekId) % WEEKLY_K;
 }
-var LS_INVITE_FROM = "eez_invite_from";
-/* v17: invite links (?in=<identity>) place the newcomer in the inviter's
-   weekly cohort. Marker identity always stays on the viewer's own identity
-   so message routing is unaffected. */
-function cohortSeedFor(ident){
-  try{
-    var inv = localStorage.getItem(LS_INVITE_FROM) || "";
-    if(inv && inv !== ident) return inv;
-  }catch(e){}
-  return ident;
-}
 function markerFor(identity, weekId){
   var c = WEEKLY_COLORS[hashStr(String(identity) + "|" + weekId + "|c") % WEEKLY_COLORS.length];
   var s = WEEKLY_SHAPES[hashStr(String(identity) + "|" + weekId + "|s") % WEEKLY_SHAPES.length];
@@ -1832,7 +1834,7 @@ async function ghApi(path, opts){
     var meWl = sessWl ? (usersWl.find(function(u){ return u.id === sessWl.uid && !u.deleted; }) || null) : null;
     var identWl = meWl ? meWl.id : guestKey();
     var weekId = currentWeekId();
-    var cohort = cohortOf(cohortSeedFor(identWl), weekId);
+    var cohort = cohortOf(identWl, weekId);
     var marker = markerFor(identWl, weekId);
     // lazy expiry: prune stale weeks, writing only when something is stale
     var shRaw = await pShWl;
@@ -1877,7 +1879,7 @@ async function ghApi(path, opts){
     var meWs = sessWs ? await findUserById(sessWs.uid) : null;
     var identWs = meWs ? meWs.id : guestKey();
     var weekIdWs = currentWeekId();
-    var cohortWs = cohortOf(cohortSeedFor(identWs), weekIdWs);
+    var cohortWs = cohortOf(identWs, weekIdWs);
     var markerWs = markerFor(identWs, weekIdWs);
     var wbody = String((json || {}).body || '').trim();
     if(!wbody) throw bad('write something first');
@@ -1901,7 +1903,7 @@ async function ghApi(path, opts){
     var meWc = sessWc ? await findUserById(sessWc.uid) : null;
     var identWc = meWc ? meWc.id : guestKey();
     var weekIdWc = currentWeekId();
-    var cohortWc = cohortOf(cohortSeedFor(identWc), weekIdWc);
+    var cohortWc = cohortOf(identWc, weekIdWc);
     var cbody = String((json || {}).body || '').trim();
     if(!cbody) throw bad('write something first');
     if(cbody.length > 1000) throw bad('keep it under 1000 characters');
@@ -1979,7 +1981,7 @@ async function ghApi(path, opts){
     if(!fbodyFw) throw bad('write something first');
     if(fbodyFw.length > 2000) throw bad('keep it under 2000 characters');
     var weekIdFw = currentWeekId();
-    var cohortFw = cohortOf(cohortSeedFor(meFw.id), weekIdFw);
+    var cohortFw = cohortOf(meFw.id, weekIdFw);
     // Perf: the comments read starts together with the shares read and is
     // only awaited when replying to a comment. Same data as before.
     var pCmsFw = commentIdFw ? ghGetJson('weekly_comments.json', true) : null;
@@ -4703,28 +4705,9 @@ var lastSendAt = 0;
     return true;
   }
 
-  function captureInvite(){
-    try{
-      var q = new URLSearchParams(location.search);
-      var inv = (q.get("in") || "").trim();
-      if(inv){
-        localStorage.setItem(LS_INVITE_FROM, inv.slice(0, 128));
-        showToast("you joined your friend's weekly group");
-        var u = new URL(location.href);
-        u.searchParams.delete("in");
-        history.replaceState(null, "", u.pathname + u.search + u.hash);
-      }
-    }catch(e){}
-  }
-
-  function myInviteLink(){
-    var ident = (state.me && state.me.id) ? state.me.id : guestKey();
-    return SHARE_URL + "/?in=" + encodeURIComponent(ident);
-  }
-
   async function shareEez() {
-    const url = myInviteLink();
-    const payload = { title: "eez", text: "join my weekly group. one real-world challenge a week, no photos, no names.", url };
+    const url = SHARE_URL;
+    const payload = { title: "eez", text: "sparse answers. meet people by what they write.", url };
     if (navigator.share) {
       try {
         await navigator.share(payload);
@@ -4836,10 +4819,10 @@ var lastSendAt = 0;
     });
     if (copyBtn) copyBtn.addEventListener("click", async () => {
       try {
-        await navigator.clipboard.writeText(myInviteLink());
+        await navigator.clipboard.writeText(SHARE_URL);
         showToast("link copied");
       } catch {
-        prompt("Copy this link", myInviteLink());
+        prompt("Copy this link", SHARE_URL);
       }
       if (sheet) sheet.hidden = true;
       try { localStorage.setItem(SHARE_KEY, String(Date.now())); } catch { /* ignore */ }
@@ -4916,7 +4899,6 @@ var lastSendAt = 0;
 
   scrubLegacyTopChrome();
   initTheme();
-  captureInvite();
   setupShareNudge();
   setupAlerts();
   setupInstallPrompt();
