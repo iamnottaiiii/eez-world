@@ -280,6 +280,13 @@
   const UITHEME_ACCENT_KEY = "eez_theme_accent";
   const UITHEME_TEXT_KEY = "eez_theme_text";
   const CUSTOM_DEFAULTS = { bg: "#101318", accent: "#5b9cff", text: "#f4f5f7" };
+  // Actual bg/accent/text of each named preset, so the color wells reflect
+  // what the preset really looks like (wells only edit the custom theme).
+  const PRESET_COLORS = {
+    midnight: { bg: "#000000", accent: "#d48972", text: "#f2ede8" },
+    paper: { bg: "#e8eaee", accent: "#c46a52", text: "#1c1a17" },
+    ocean: { bg: "#04121f", accent: "#4fd6e8", text: "#dcefef" },
+  };
   const CUSTOM_THEME_VARS = ["--bg", "--bg2", "--bg3", "--surface", "--ink", "--muted", "--muted2",
     "--accent", "--accent-soft", "--accent-ink", "--btn-bg", "--btn-fg", "--toast-bg", "--toast-fg",
     "--modal", "--unread", "--red", "--bubble-theirs", "--bubble-mine", "--fade-well", "--sep",
@@ -517,9 +524,11 @@
       const cust = document.getElementById("theme-custom-on");
       if (cust) cust.hidden = draft.preset !== "custom";
       const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-      setVal("theme-bg-color", draft.custom.bg);
-      setVal("theme-accent-color", draft.custom.accent);
-      setVal("theme-text-color", draft.custom.text);
+      // Wells mirror the selected preset's real colors; only "custom" edits draft.custom.
+      const shown = draft.preset === "custom" ? draft.custom : (PRESET_COLORS[draft.preset] || draft.custom);
+      setVal("theme-bg-color", shown.bg);
+      setVal("theme-accent-color", shown.accent);
+      setVal("theme-text-color", shown.text);
       if (saveBtn) saveBtn.disabled = themeDraftEqual(draft, saved);
     };
     const previewDraft = () => {
@@ -2135,6 +2144,17 @@ var lastSendAt = 0;
       });
       await refreshMe();
       hideModal();
+      // Flush a guest's pending card answer now that they're logged in.
+      const pa = state.pendingAnswer;
+      state.pendingAnswer = null;
+      if (pa && pa.id && pa.body) {
+        try {
+          await sendAnswer(pa.id, pa.body);
+          return; // sendAnswer navigates to the new thread
+        } catch (perr) {
+          alert(perr.message);
+        }
+      }
       render();
     } catch (err) {
       restore();
@@ -2643,7 +2663,8 @@ var lastSendAt = 0;
           </dl>
           <form class="answer-ambient" hidden>
             <label class="sr-only" for="answer-body">your answer</label>
-            <textarea id="answer-body" name="body" required maxlength="2000" rows="3" placeholder="answer their question… (Enter to send)"></textarea>
+            <textarea id="answer-body" name="body" required maxlength="2000" rows="3" placeholder="answer their question…"></textarea>
+            <div class="answer-actions"><button class="btn primary sm" type="submit">send</button></div>
           </form>
         </div>
         <div class="slide-bar" id="slide-bar">
