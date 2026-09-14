@@ -214,7 +214,7 @@
       async () => {
         const onInbox = document.body.classList.contains("page-inbox");
         try {
-          const data = await api("/api/conversations");
+          const data = await api("/api/conversations", { live: true });
           const list = data.conversations || [];
           updateInboxBadgeFrom(list);
           if (onInbox) {
@@ -912,10 +912,14 @@ var fileCache = {};
    file share one network request instead of firing duplicates. Fresh
    (pre-write) reads bypass it so they always hit the network. */
 var inflightReads = {};
+/* Memory TTL for etag reads: repeat reads within a few seconds are served
+   from memory with zero network (tab switches feel instant). Polls pass
+   live=true to always revalidate. */
+var MEM_TTL_MS = 10000;
 
-async function ghGetJson(path, useEtag){
+async function ghGetJson(path, useEtag, live){
   if(useEtag && inflightReads[path]) return inflightReads[path];
-  var p = ghGetJsonOnce(path, useEtag);
+  var p = ghGetJsonOnce(path, useEtag, live);
   if(useEtag){
     inflightReads[path] = p;
     try { return await p; }
@@ -924,18 +928,19 @@ async function ghGetJson(path, useEtag){
   return p;
 }
 
-async function ghGetJsonOnce(path, useEtag){
+async function ghGetJsonOnce(path, useEtag, live){
   var cached = fileCache[path];
+  if(useEtag && !live && cached && cached.data !== undefined && cached.fetchedAt && (Date.now() - cached.fetchedAt < MEM_TTL_MS)) return cached;
   var headers = null;
   if(useEtag && cached && cached.etag){ headers = {'If-None-Match': cached.etag}; }
   var res = await ghFetchRaw('/contents/' + path + '?ref=main', {headers: headers});
-  if(res.status === 304 && cached) return cached;
+  if(res.status === 304 && cached){ cached.fetchedAt = Date.now(); return cached; }
   if(res.status === 404) return null;
   if(!res.ok){ var e = new Error('read failed (' + res.status + ')'); e.status = res.status; throw e; }
   var file = await res.json();
   var etag = res.headers.get('ETag');
   var raw = b64decodeToBytes(file.content || '');
-  var rec = { data: JSON.parse(new TextDecoder().decode(raw)), sha: file.sha, etag: etag, isJson: true };
+  var rec = { data: JSON.parse(new TextDecoder().decode(raw)), sha: file.sha, etag: etag, isJson: true, fetchedAt: Date.now() };
   fileCache[path] = rec;
   return rec;
 }
@@ -943,6 +948,7 @@ async function ghGetJsonOnce(path, useEtag){
 /* Fresh read bypassing etag (used before writes to get current sha). */
 async function ghGetJsonFresh(path){
   var rec = await ghGetJson(path, false);
+  if(rec) rec.fetchedAt = Date.now();
   return rec;
 }
 
@@ -955,7 +961,7 @@ async function ghPutJson(path, obj, sha, message){
   var res = await ghFetchRaw('/contents/' + path, {method: 'PUT', body: JSON.stringify(body)});
   if(!res.ok){ var e = new Error('save failed (' + res.status + ')'); e.status = res.status; throw e; }
   var out = await res.json();
-  fileCache[path] = { data: obj, sha: (out.content && out.content.sha) || null, etag: null, isJson: true };
+  fileCache[path] = { data: obj, sha: (out.content && out.content.sha) || null, etag: null, isJson: true, fetchedAt: Date.now() };
   return out;
 }
 
@@ -1026,8 +1032,8 @@ function guestKey(){
 }
 
 /* ---- users ---- */
-async function getUsers(){ var r = await ghGetJson('users.json', true); return r ? r.data : []; }
-async function findUserById(id){ var us = await getUsers(); return us.find(function(u){ return u.id === id && !u.deleted; }) || null; }
+async function getUsers(live){ var r = await ghGetJson('users.json', true, live); return r ? r.data : []; }
+async function findUserById(id, live){ var us = await getUsers(live); return us.find(function(u){ return u.id === id && !u.deleted; }) || null; }
 async function findUserByEmail(email){
   var us = await getUsers();
   var em = String(email||'').trim().toLowerCase();
@@ -1110,9 +1116,9 @@ async function getFeed(userId){
 }
 
 /* ---- conversations ---- */
-async function getConvos(){ var r = await ghGetJson('conversations.json', true); return r ? r.data : []; }
-async function getMessages(){ var r = await ghGetJson('messages.json', true); return r ? r.data : []; }
-async function getPrefs(){ var r = await ghGetJson('conversation_prefs.json', true); return r ? r.data : []; }
+async function getConvos(live){ var r = await ghGetJson('conversations.json', true, live); return r ? r.data : []; }
+async function getMessages(live){ var r = await ghGetJson('messages.json', true, live); return r ? r.data : []; }
+async function getPrefs(live){ var r = await ghGetJson('conversation_prefs.json', true, live); return r ? r.data : []; }
 function myPrefs(prefs, uid, cid){
   return prefs.find(function(p){ return p.user_id === uid && p.conversation_id === cid; }) || null;
 }
@@ -1666,11 +1672,12 @@ async function ghApi(path, opts){
   if(p === '/api/conversations' && method === 'GET'){
     // Perf: five independent reads fire together (in-flight dedup keeps the
     // users.json pair to one request). Same data as the sequential version.
+    var liveC = !!(opts && opts.live);
     var pMeC = requireMe();
-    var pConvosC = getConvos();
-    var pUsersC = getUsers();
-    var pMsgsC = getMessages();
-    var pPrefsC = getPrefs();
+    var pConvosC = getConvos(liveC);
+    var pUsersC = getUsers(liveC);
+    var pMsgsC = getMessages(liveC);
+    var pPrefsC = getPrefs(liveC);
     var meC = await pMeC;
     var convos = await pConvosC;
     var usersC = await pUsersC;
@@ -2038,10 +2045,10 @@ async function ghThreadPoll(id){
   var sess = loadSession();
   // Perf: four independent reads fire together (dedup keeps users.json to one
   // request). Same data as the sequential version.
-  var pMePl = sess ? findUserById(sess.uid) : Promise.resolve(null);
-  var pConvosPl = getConvos();
-  var pPrefsPl = getPrefs();
-  var pMsgsPl = getMessages();
+  var pMePl = sess ? findUserById(sess.uid, true) : Promise.resolve(null);
+  var pConvosPl = getConvos(true);
+  var pPrefsPl = getPrefs(true);
+  var pMsgsPl = getMessages(true);
   var me = await pMePl;
   if(!me){ var e = new Error('log in first'); e.status = 401; throw e; }
   var convos = await pConvosPl;
@@ -4928,6 +4935,15 @@ var lastSendAt = 0;
   // Keep scrubbing once more after first paint in case anything reinjects.
   requestAnimationFrame(() => scrubLegacyTopChrome());
   setTimeout(scrubLegacyTopChrome, 0);
+  /* Warm the other tabs' files in the background so the first switch is instant. */
+  function prefetchTabs(){
+    try{
+      ['questions.json','answers.json','prompts.json','weekly_shares.json','weekly_comments.json',
+       'conversations.json','messages.json','conversation_prefs.json','feed.json','skips.json',
+       'blocks.json','reports.json','bookmarks.json'].forEach(function(f){ ghGetJson(f, true).catch(function(){}); });
+    }catch(e){}
+  }
+
   refreshMe()
     .then(() => {
       applyUserAppearance(state.me);
@@ -4936,5 +4952,5 @@ var lastSendAt = 0;
       return Promise.all([refreshAlerts(), refreshInboxBadge()]);
     })
     .catch(() => {})
-    .finally(render);
+    .finally(() => { render(); setTimeout(prefetchTabs, 2500); });
 })();
