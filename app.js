@@ -965,13 +965,24 @@ async function ghPutJson(path, obj, sha, message){
   return out;
 }
 
-/* Read-modify-write with 409/422 retry. fn receives the array (or [] when missing). */
+/* Read-modify-write with 409/422 retry. fn receives the array (or [] when missing).
+   Perf: the first attempt reuses the in-memory copy (from a recent read or
+   write) and goes straight to the PUT, skipping the pre-write GET. The copy
+   is deep-cloned so a failed attempt never pollutes the cache; a 409/422
+   falls back to a fresh read, exactly like before. */
 async function mutateJson(path, fn, message){
   var lastErr = null;
   for(var i=0;i<4;i++){
-    var rec = await ghGetJsonFresh(path);
-    var data = rec ? rec.data : [];
+    var rec, fast = false;
+    if(i === 0 && fileCache[path] && fileCache[path].data !== undefined){
+      rec = fileCache[path];
+      fast = true;
+    }else{
+      rec = await ghGetJsonFresh(path);
+    }
+    var data = (rec && rec.data !== undefined) ? rec.data : [];
     if(!Array.isArray(data)) data = [];
+    else if(fast) data = JSON.parse(JSON.stringify(data));
     var out = fn(data);
     if(out === undefined) out = data;
     try{
