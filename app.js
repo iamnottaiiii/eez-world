@@ -1715,22 +1715,21 @@ async function ghApi(path, opts){
     var tsM = nowS();
     var msg = {id: newId(), conversation_id: mid, sender_id: meM.id, body: mbody, kind: 'user', created_at: tsM};
     var oidM = otherId(cm, meM.id);
-    // Perf: the five writes touch five different files, so they run together
-    // instead of in series. Same data as before.
-    await Promise.all([
-      mutateJson('messages.json', function(ms){ ms.push(msg); }, 'eez: send message'),
-      mutateJson('conversations.json', function(cs){
-        var c = cs.find(function(x){ return x.id === mid; });
-        if(c) c.last_activity_at = tsM;
-      }, 'eez: touch convo'),
-      mutateJson('conversation_prefs.json', function(ps){
-        var mp = ps.find(function(x){ return x.user_id === meM.id && x.conversation_id === mid; });
-        if(!mp) ps.push({user_id: meM.id, conversation_id: mid, title: '', muted: 0, read_receipts: 1, last_read_at: tsM});
-        else mp.last_read_at = tsM;
-      }, 'eez: mark read'),
-      feedPush(oidM, 'message', 'new message', mid),
-      touchSeen(meM)
-    ]);
+    // Perf: only the message write is awaited. The touch/prefs/feed/seen
+    // writes are best-effort and finish in the background. Same data.
+    var writeMsgM = mutateJson('messages.json', function(ms){ ms.push(msg); }, 'eez: send message');
+    mutateJson('conversations.json', function(cs){
+      var c = cs.find(function(x){ return x.id === mid; });
+      if(c) c.last_activity_at = tsM;
+    }, 'eez: touch convo').catch(function(){});
+    mutateJson('conversation_prefs.json', function(ps){
+      var mp = ps.find(function(x){ return x.user_id === meM.id && x.conversation_id === mid; });
+      if(!mp) ps.push({user_id: meM.id, conversation_id: mid, title: '', muted: 0, read_receipts: 1, last_read_at: tsM});
+      else mp.last_read_at = tsM;
+    }, 'eez: mark read').catch(function(){});
+    feedPush(oidM, 'message', 'new message', mid);
+    touchSeen(meM);
+    await writeMsgM;
     return {message: {id: msg.id, kind: msg.kind, body: msg.body, sender_id: msg.sender_id, created_at: s2ms(msg.created_at)}};
   }
   var prefsM = /^\/api\/conversations\/([^/]+)\/prefs$/.exec(p);
@@ -1965,31 +1964,32 @@ async function ghApi(path, opts){
       cid = newId();
     }
     var firstMsg = {id: newId(), conversation_id: cid, sender_id: me.id, body: fbody, kind: 'user', created_at: ts};
-    // Perf: the writes touch different files, so they run together instead of
-    // in series. A newly created conversation already carries last_activity_at,
-    // so the touch is only needed for existing ones. Same data as before.
-    var writesOc = [
-      mutateJson('messages.json', function(ms){ ms.push(firstMsg); }, 'eez: first message'),
-      mutateJson('conversation_prefs.json', function(ps){
-        var mp = ps.find(function(x){ return x.user_id === me.id && x.conversation_id === cid; });
-        if(!mp) ps.push({user_id: me.id, conversation_id: cid, title: '', muted: 0, read_receipts: 1, last_read_at: ts});
-        else mp.last_read_at = ts;
-      }, 'eez: mark read'),
-      touchSeen(me)
+    // Perf: the conversation and message writes are awaited in parallel; the
+    // prefs and presence writes are best-effort and finish in the background.
+    // A newly created conversation already carries last_activity_at, so the
+    // touch is only needed for existing ones. Same data as before.
+    var critOc = [
+      mutateJson('messages.json', function(ms){ ms.push(firstMsg); }, 'eez: first message')
     ];
     if(isNewOc){
-      writesOc.push(mutateJson('conversations.json', function(cs){
+      critOc.push(mutateJson('conversations.json', function(cs){
         var rec = {id: cid, initiator_id: me.id, recipient_id: recipId, created_at: ts, last_activity_at: ts, hidden_from_initiator: 0, bump_sent_at: 0};
         if(extras && extras.weekly) rec.weekly = extras.weekly;
         cs.push(rec);
       }, 'eez: new conversation'));
     }else{
-      writesOc.push(mutateJson('conversations.json', function(cs){
+      critOc.push(mutateJson('conversations.json', function(cs){
         var c = cs.find(function(x){ return x.id === cid; });
         if(c) c.last_activity_at = ts;
       }, 'eez: touch convo'));
     }
-    await Promise.all(writesOc);
+    mutateJson('conversation_prefs.json', function(ps){
+      var mp = ps.find(function(x){ return x.user_id === me.id && x.conversation_id === cid; });
+      if(!mp) ps.push({user_id: me.id, conversation_id: cid, title: '', muted: 0, read_receipts: 1, last_read_at: ts});
+      else mp.last_read_at = ts;
+    }, 'eez: mark read').catch(function(){});
+    touchSeen(me);
+    await Promise.all(critOc);
     return cid;
   }
   if(p === '/api/conversations/from-card' && method === 'POST'){
