@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="eez" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>eez - meet people through what you do</title>
+  <meta name="description" content="eez is a free social app for meeting new people without bias. Weekly real-world challenges in small groups. No photos, no names, no profiles. Not dating." />
+  <meta property="og:title" content="eez" />
+  <meta property="og:description" content="Meet new people through what you do. Weekly real-world challenges, no photos, no names." />
+  <meta property="og:url" content="https://eez.world/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://eez.world/icons/eez.svg" />
+  <script>
+    (function () {
+      try {
+        // Base look is always dark. A saved whole-UI theme applies before first paint.
+        document.documentElement.setAttribute("data-theme", "dark");
+        document.documentElement.style.colorScheme = "dark";
+        var ut = localStorage.getItem("eez_uitheme");
+        if (["midnight", "paper", "ocean", "custom"].indexOf(ut) >= 0) {
+          document.documentElement.setAttribute("data-uitheme", ut);
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/eez.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/eez.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://api.github.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=12" />
+</head>
+<body>
+  <div class="app-shell">
+    <a class="a11y-jump" href="#app">jump to content</a>
+    <button type="button" class="brand-word" id="brand-share" aria-label="share eez">eez</button>
+    <button type="button" class="alerts-btn" id="alerts-btn" aria-label="alerts" hidden>alerts<span class="alerts-dot" id="alerts-dot" hidden></span></button>
+    <div id="alerts-panel" class="alerts-panel" hidden>
+      <div class="alerts-head"><strong>alerts</strong><button type="button" class="btn ghost sm" id="alerts-clear">mark read</button></div>
+      <div id="alerts-list" class="alerts-list"><p class="hint">nothing yet</p></div>
+    </div>
+    <main id="app" class="app" tabindex="-1"></main>
+
+    <nav class="bottom-nav" aria-label="primary mobile">
+      <a href="#/" data-nav="home">home</a>
+      <a href="#/qa" data-nav="qa">q&amp;a</a>
+      <a href="#/weekly" data-nav="weekly">weekly</a>
+      <a href="#/messages" data-nav="messages">inbox</a>
+      <a href="#/you" data-nav="you">you</a>
+    </nav>
+
+    <div id="share-sheet" class="share-sheet" hidden>
+      <div class="share-card" role="dialog" aria-modal="true" aria-labelledby="share-title">
+        <h2 id="share-title">Share eez</h2>
+        <p class="hint">Your link puts them in your weekly group.</p>
+        <div class="row-btns">
+          <button type="button" class="btn primary" id="share-native">share</button>
+          <button type="button" class="btn" id="share-copy">copy link</button>
+          <button type="button" class="btn ghost" id="share-dismiss">not now</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="install-sheet" class="install-sheet" hidden>
+      <div class="install-card" role="dialog" aria-modal="true" aria-labelledby="install-title">
+        <h2 id="install-title">Install eez</h2>
+        <p class="hint">Add eez to your home screen for a quieter, app-like feel.</p>
+        <div class="row-btns">
+          <button type="button" class="btn primary" id="install-accept">install</button>
+          <button type="button" class="btn" id="install-dismiss">not now</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+
+    <div id="modal" class="modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <h2 id="modal-title">log in</h2>
+        <p class="hint" id="modal-hint">Log in to continue.</p>
+        <form id="modal-form" class="form">
+          <label>email <input name="email" type="email" autocomplete="username" required /></label>
+          <label>password <input name="password" type="password" autocomplete="current-password" required minlength="8" /></label>
+          <div class="row-btns">
+            <button type="submit" class="btn primary">continue</button>
+            <button type="button" class="btn" id="modal-cancel">cancel</button>
+          </div>
+        </form>
+        <p class="fine"><a href="#/register">create an account</a></p>
+      </div>
+    </div>
+  </div>
+
+    <script src="config.js?v=2"></script>
+  <script src="app.js?v=17" defer></script>
+</body>
+</html>
