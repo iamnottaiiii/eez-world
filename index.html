@@ -398,6 +398,18 @@
   window.addEventListener('pointermove', function(e){ if(state==='playing' || state==='ready') setTargetFromEvent(e); });
   canvas.addEventListener('touchmove', function(e){ e.preventDefault(); setTargetFromEvent(e); }, {passive:false});
 
+  // One continuous touch per run: lifting a finger mid-run ends it.
+  // Touch only, so mouse and keyboard play are untouched.
+  function liftEndsRun(e){
+    if(state !== 'playing') return;
+    if(e.pointerType && e.pointerType !== 'touch') return;
+    fail();
+  }
+  window.addEventListener('pointerup', liftEndsRun);
+  window.addEventListener('pointercancel', liftEndsRun);
+  window.addEventListener('touchend', liftEndsRun);
+  window.addEventListener('touchcancel', liftEndsRun);
+
   window.addEventListener('keydown', function(e){
     keys[e.key.toLowerCase()] = true;
     if(e.key===' '){
