@@ -23,17 +23,17 @@
     overflow: hidden;
   }
   /* The bjvfi void: layered rings and a soft light well, plus a vignette. */
-  .void { position: fixed; inset: 0; overflow: hidden; background: #000; }
+  .void { --cx: 50%; --cy: 50%; position: fixed; inset: 0; overflow: hidden; background: #000; }
   .void::before {
     content: ""; position: absolute; inset: 0;
     background:
-      repeating-conic-gradient(from 0deg at 50% 50%,
+      repeating-conic-gradient(from 0deg at var(--cx) var(--cy),
         rgba(255,255,255,.012) 0deg 1deg,
         transparent 1deg 2deg),
-      repeating-radial-gradient(circle at 50% 50%,
+      repeating-radial-gradient(circle at var(--cx) var(--cy),
         rgba(255,255,255,.010) 0px 1px,
         transparent 1px 4px),
-      radial-gradient(circle at 50% 50%,
+      radial-gradient(circle at var(--cx) var(--cy),
         #000 0%, #000 6%, #010101 11%, #050505 18%, #0d0d0d 26%,
         #161616 36%, #1f1f1f 48%, #262626 62%, #1f1f1f 78%,
         #0d0d0d 92%, #030303 100%);
@@ -42,7 +42,7 @@
   }
   .void::after {
     content: ""; position: absolute; inset: 0; z-index: 3;
-    background: radial-gradient(circle at 50% 50%,
+    background: radial-gradient(circle at var(--cx) var(--cy),
       transparent 0%, transparent 40%,
       rgba(0,0,0,.35) 75%, rgba(0,0,0,.95) 100%);
     pointer-events: none;
@@ -70,16 +70,33 @@
 (function () {
   var canvas = document.getElementById("game");
   var ctx = canvas.getContext("2d");
+  var voidEl = document.querySelector(".void");
   var sizeEl = document.getElementById("size");
   var eatenEl = document.getElementById("eaten");
 
   var W = 0, H = 0, DPR = 1;
   var pellets = [];
-  var player = { x: 0, y: 0, r: 14 };
-  var target = null;               // where the light is heading
   var eaten = 0;
+  var coreR = 26;                  // the bright heart of the light, grows as you eat
+  var MAX_CORE = 120;
   var keys = {};
-  var MAX_R = 120;
+
+  // The bjvfi way: the light center is a pair of percentages that ease
+  // after the pointer. The background gradients are centered on them, so
+  // the whole light well glides across the screen. There is no ball.
+  var tx = 50, ty = 50, cx = 50, cy = 50;
+  function point(x, y) {
+    var r = voidEl.getBoundingClientRect();
+    tx = ((x - r.left) / r.width) * 100;
+    ty = ((y - r.top) / r.height) * 100;
+  }
+  document.addEventListener("mousemove", function (e) { point(e.clientX, e.clientY); }, { passive: true });
+  document.addEventListener("touchmove", function (e) {
+    if (e.touches && e.touches[0]) point(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  document.addEventListener("mouseleave", function () { tx = 50; ty = 50; });
+  document.addEventListener("keydown", function (e) { keys[e.key.toLowerCase()] = true; });
+  document.addEventListener("keyup", function (e) { keys[e.key.toLowerCase()] = false; });
 
   function pelletCount() { return Math.max(60, Math.min(150, Math.round(W * H / 15000))); }
   function newPellet() {
@@ -87,7 +104,7 @@
       x: 24 + Math.random() * Math.max(10, W - 48),
       y: 24 + Math.random() * Math.max(10, H - 48),
       r: 3 + Math.random() * 4,
-      warm: Math.random() < 0.16    // a few warm dots among the pale ones
+      warm: Math.random() < 0.16
     };
   }
   function seed() {
@@ -102,43 +119,34 @@
     canvas.height = Math.round(H * DPR);
     canvas.style.width = W + "px";
     canvas.style.height = H + "px";
-    if (!player.x && !player.y) { player.x = W / 2; player.y = H / 2; }
-    player.x = Math.max(player.r, Math.min(W - player.r, player.x));
-    player.y = Math.max(player.r, Math.min(H - player.r, player.y));
     seed();
   }
   window.addEventListener("resize", resize);
 
-  window.addEventListener("pointermove", function (e) { target = { x: e.clientX, y: e.clientY }; });
-  window.addEventListener("pointerdown", function (e) { target = { x: e.clientX, y: e.clientY }; });
-  window.addEventListener("keydown", function (e) { keys[e.key.toLowerCase()] = true; });
-  window.addEventListener("keyup", function (e) { keys[e.key.toLowerCase()] = false; });
-
   function step() {
-    // The orb itself travels, the way the bjvfi light follows you around.
-    if (!target) target = { x: player.x, y: player.y };
-    var stepPx = 16;
-    if (keys["arrowleft"] || keys["a"]) target.x -= stepPx;
-    if (keys["arrowright"] || keys["d"]) target.x += stepPx;
-    if (keys["arrowup"] || keys["w"]) target.y -= stepPx;
-    if (keys["arrowdown"] || keys["s"]) target.y += stepPx;
-    target.x = Math.max(0, Math.min(W, target.x));
-    target.y = Math.max(0, Math.min(H, target.y));
-    player.x += (target.x - player.x) * 0.07;
-    player.y += (target.y - player.y) * 0.07;
-    player.x = Math.max(player.r, Math.min(W - player.r, player.x));
-    player.y = Math.max(player.r, Math.min(H - player.r, player.y));
+    var kstep = 1.6;
+    if (keys["arrowleft"] || keys["a"]) tx -= kstep;
+    if (keys["arrowright"] || keys["d"]) tx += kstep;
+    if (keys["arrowup"] || keys["w"]) ty -= kstep;
+    if (keys["arrowdown"] || keys["s"]) ty += kstep;
+    tx = Math.max(0, Math.min(100, tx));
+    ty = Math.max(0, Math.min(100, ty));
+    cx += (tx - cx) * 0.055;       // same ease as bjvfi
+    cy += (ty - cy) * 0.055;
+    voidEl.style.setProperty("--cx", cx + "%");
+    voidEl.style.setProperty("--cy", cy + "%");
 
-    // Eating: touch a dot, grow a little, a new dot appears somewhere.
+    // Eating: a dot inside the light's bright core gets eaten.
+    var px = cx / 100 * W, py = cy / 100 * H;
     for (var i = 0; i < pellets.length; i++) {
       var p = pellets[i];
-      var dx = p.x - player.x, dy = p.y - player.y;
-      var rr = player.r + p.r * 0.4;
+      var dx = p.x - px, dy = p.y - py;
+      var rr = coreR + p.r * 0.4;
       if (dx * dx + dy * dy < rr * rr) {
-        if (player.r < MAX_R) player.r = Math.min(MAX_R, Math.sqrt(player.r * player.r + p.r * p.r * 0.55));
+        if (coreR < MAX_CORE) coreR = Math.min(MAX_CORE, Math.sqrt(coreR * coreR + p.r * p.r * 2.2));
         eaten++;
         pellets[i] = newPellet();
-        sizeEl.textContent = Math.round(player.r * 2);
+        sizeEl.textContent = Math.round(coreR * 2);
         eatenEl.textContent = eaten;
       }
     }
@@ -147,6 +155,7 @@
   function draw() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.clearRect(0, 0, W, H);
+    var px = cx / 100 * W, py = cy / 100 * H;
 
     // The dots sit still on the void. Only the light moves.
     for (var i = 0; i < pellets.length; i++) {
@@ -157,22 +166,18 @@
       ctx.fill();
     }
 
-    // The player: a soft light well with a bright core, the bjvfi glow.
-    var glow = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, player.r * 4.2);
-    glow.addColorStop(0, "rgba(255,255,255,0.20)");
-    glow.addColorStop(0.5, "rgba(255,255,255,0.05)");
+    // The bright heart of the light, soft, drawn where the center is.
+    var glow = ctx.createRadialGradient(px, py, 0, px, py, coreR * 2.6);
+    glow.addColorStop(0, "rgba(255,255,255,0.28)");
+    glow.addColorStop(0.45, "rgba(255,255,255,0.07)");
     glow.addColorStop(1, "rgba(255,255,255,0)");
     ctx.beginPath();
-    ctx.arc(player.x, player.y, player.r * 4.2, 0, Math.PI * 2);
+    ctx.arc(px, py, coreR * 2.6, 0, Math.PI * 2);
     ctx.fillStyle = glow;
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
-    ctx.fillStyle = "#F2F2F5";
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(player.x, player.y, player.r * 0.62, 0, Math.PI * 2);
-    ctx.fillStyle = "#ffffff";
+    ctx.arc(px, py, coreR * 0.42, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
     ctx.fill();
   }
 
@@ -182,7 +187,7 @@
     requestAnimationFrame(frame);
   }
   resize();
-  sizeEl.textContent = Math.round(player.r * 2);
+  sizeEl.textContent = Math.round(coreR * 2);
   requestAnimationFrame(frame);
 })();
 </script>
