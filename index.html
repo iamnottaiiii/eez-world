@@ -36,7 +36,7 @@
   canvas{
     position:absolute;inset:0;width:100%;height:100%;display:block;
     touch-action:none;
-    cursor:crosshair;
+    cursor:none;
   }
 
   /* The one quiet marker: how far along the path you are */
@@ -53,8 +53,10 @@
   .pips i.now{background:#fff;box-shadow:0 0 8px rgba(255,255,255,.8)}
   .pips[hidden]{display:none}
 
+  /* Persistent counter: fixed to the viewport, above every overlay,
+     never hidden by any game state */
   .wins{
-    position:absolute;top:14px;right:16px;z-index:5;pointer-events:none;
+    position:fixed;top:14px;right:16px;z-index:60;pointer-events:none;
     font-size:13px;font-weight:700;letter-spacing:.02em;
     color:rgba(245,241,232,.85);
   }
@@ -91,8 +93,6 @@
 <main class="stage" id="stage">
   <canvas id="game"></canvas>
 
-  <div class="wins" id="wins">Wins <b>0</b></div>
-
   <div class="pips" id="pips" hidden></div>
 
   <div class="overlay" id="overlayStart">
@@ -114,11 +114,15 @@
   <div class="overlay" id="overlayWin" hidden>
     <div class="card win">
       <h1>You <em>made it.</em></h1>
-      <p>The next path is longer, and they hunt harder.</p>
+      <p>The next path grows a little longer.</p>
       <button class="btn" id="btnAgain" type="button">Next path</button>
     </div>
   </div>
 </main>
+
+<!-- Persistent wins counter: lives outside the stage, overlays and canvas,
+     so no game state can hide, move or reset it -->
+<div class="wins" id="wins">Wins <b id="winsNum">0</b></div>
 
 <script>
 (function(){
@@ -131,6 +135,7 @@
   var overlayWin = document.getElementById('overlayWin');
   var failText = document.getElementById('failText');
   var winsEl = document.getElementById('wins');
+  var winsNumEl = document.getElementById('winsNum');
 
   var W = 0, H = 0, DPR = 1;
   function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
@@ -152,6 +157,28 @@
   var spawnTimer = 0;
   var shake = 0;
   var audioCtx = null;
+
+  // ---------- saved progress ----------
+  // Wins and the current level are stored on the device and restored on
+  // every visit. The save is only ever written, never cleared or removed,
+  // and the game keeps working in memory if storage is unavailable.
+  var SAVE_KEY = 'destination-game.progress.v1';
+  function saveProgress(){
+    try{
+      window.localStorage.setItem(SAVE_KEY, JSON.stringify({ wins: wins, level: level }));
+    }catch(e){}
+  }
+  function loadProgress(){
+    try{
+      var raw = window.localStorage.getItem(SAVE_KEY);
+      if(!raw) return;
+      var d = JSON.parse(raw);
+      if(d){
+        if(typeof d.wins === 'number' && isFinite(d.wins)) wins = Math.max(0, Math.floor(d.wins));
+        if(typeof d.level === 'number' && isFinite(d.level)) level = clamp(Math.floor(d.level), 1, 999);
+      }
+    }catch(e){}
+  }
 
   function resize(){
     var r = stage.getBoundingClientRect();
@@ -247,25 +274,33 @@
   function resetGame(lv){
     level = lv;
     hunters = []; particles = [];
-    elapsed = 0; spawnTimer = 500; shake = 0;
+    elapsed = 0; spawnTimer = 950; shake = 0;
     resetPositions();
     buildPath();
+  }
+  // The counter element is never hidden or rebuilt; only its number changes.
+  function renderWins(){
+    winsNumEl.textContent = wins;
+    winsEl.style.display = '';
   }
   function startRun(lv){
     ensureAudio();
     resetGame(lv);
+    saveProgress();
     state = 'playing';
+    renderWins();
     overlayStart.hidden = true; overlayFail.hidden = true; overlayWin.hidden = true;
     pipsEl.hidden = false;
   }
   function showStart(){
     state = 'ready';
-    resetGame(1);
+    resetGame(level);
     overlayStart.hidden = false; overlayFail.hidden = true; overlayWin.hidden = true;
     pipsEl.hidden = true;
   }
   function fail(){
     state = 'failed'; shake = 14; soundHit();
+    renderWins();
     burst(player.x, player.y, '#ff4757', 26);
     burst(player.x, player.y, '#ffffff', 12);
     var left = path.length - wpIndex;
@@ -280,7 +315,8 @@
   function win(){
     state = 'won'; soundWin();
     wins++;
-    winsEl.innerHTML = 'Wins <b>' + wins + '</b>';
+    saveProgress();
+    renderWins();
     var d = path[path.length-1];
     burst(d.x, d.y, '#8affc1', 30);
     burst(d.x, d.y, '#ffd166', 22);
@@ -294,8 +330,8 @@
     soundStep();
     wpIndex++;
     renderPips();
-    // every light you reach makes them come harder
-    spawnTimer = Math.min(spawnTimer, 260);
+    // every light you reach brings them a touch sooner
+    spawnTimer = Math.min(spawnTimer, 420);
   }
 
   // ---------- hunters ----------
@@ -305,9 +341,9 @@
   function difficulty(){
     var stageFrac = path.length ? wpIndex / path.length : 0;
     return {
-      speed: 1.45 + (level-1)*0.22 + stageFrac*1.15 + elapsed*0.008,
-      turn: 0.020 + (level-1)*0.003 + stageFrac*0.022,   // radians per frame of steering
-      interval: clamp(760 - (level-1)*60 - stageFrac*330 - elapsed*2.4, 235, 760)
+      speed: 1.02 + (level-1)*0.06 + stageFrac*0.30 + elapsed*0.0025,
+      turn: 0.013 + (level-1)*0.0012 + stageFrac*0.007,   // radians per frame of steering
+      interval: clamp(980 - (level-1)*30 - stageFrac*140 - elapsed*1.0, 560, 980)
     };
   }
   function spawnHunter(){
@@ -338,7 +374,7 @@
   }
   function collides(h){
     var dx = player.x - h.x, dy = player.y - h.y;
-    var rr = (player.r * 0.88) + (h.r * 0.82);
+    var rr = (player.r * 0.78) + (h.r * 0.72);
     return (dx*dx + dy*dy) < rr*rr;
   }
 
@@ -366,7 +402,7 @@
     keys[e.key.toLowerCase()] = true;
     if(e.key===' '){
       e.preventDefault();
-      if(state==='ready') startRun(1);
+      if(state==='ready') startRun(level);
       else if(state==='failed') startRun(level);
       else if(state==='won') startRun(level+1);
     }
@@ -374,7 +410,7 @@
   });
   window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
 
-  document.getElementById('btnStart').addEventListener('click', function(){ startRun(1); });
+  document.getElementById('btnStart').addEventListener('click', function(){ startRun(level); });
   document.getElementById('btnRetry').addEventListener('click', function(){ startRun(level); });
   document.getElementById('btnAgain').addEventListener('click', function(){ startRun(level+1); });
 
@@ -509,20 +545,19 @@
         player.ty = clamp(player.ty, player.r+4, H-player.r-4);
       }
 
-      // the light glides after its target
-      var ease = 1 - Math.pow(1 - 0.14, dt);
-      player.x += (player.tx - player.x) * ease;
-      player.y += (player.ty - player.y) * ease;
+      // the light sits right on the pointer, no gap
+      player.x = player.tx;
+      player.y = player.ty;
       player.x = clamp(player.x, player.r+4, W-player.r-4);
       player.y = clamp(player.y, player.r+4, H-player.r-4);
 
-      // spawning, faster and thicker the further you get
+      // spawning grows gently the further you get
       spawnTimer -= dtMs;
       if(spawnTimer <= 0){
         spawnHunter();
-        if(wpIndex >= 2 && Math.random() < 0.3) spawnHunter();
-        if(level >= 3 && Math.random() < 0.25) spawnHunter();
-        spawnTimer = difficulty().interval * rand(0.72, 1.2);
+        if(wpIndex >= 3 && Math.random() < 0.14) spawnHunter();
+        if(level >= 4 && Math.random() < 0.10) spawnHunter();
+        spawnTimer = difficulty().interval * rand(0.85, 1.25);
       }
 
       // hunters steer toward you
@@ -562,19 +597,20 @@
       ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI*2); ctx.fill(); ctx.restore();
     }
 
-    // player light
+    // the control: just a plus, centered exactly on the pointer.
+    // The dotted route line ends on this plus; there is no separate dot.
     if(state !== 'failed'){
       ctx.save();
-      var pg = ctx.createRadialGradient(player.x, player.y, 1, player.x, player.y, 52);
-      pg.addColorStop(0, 'rgba(255,247,204,.95)');
-      pg.addColorStop(0.28, 'rgba(255,209,102,.55)');
-      pg.addColorStop(1, 'rgba(255,209,102,0)');
-      ctx.fillStyle = pg;
-      ctx.beginPath(); ctx.arc(player.x, player.y, 52, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = '#fffbe6'; ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#111';
-      ctx.beginPath(); ctx.arc(player.x, player.y, 3.6, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = '#ffd166';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      var arm = player.r + 3;
+      ctx.beginPath();
+      ctx.moveTo(player.x - arm, player.y);
+      ctx.lineTo(player.x + arm, player.y);
+      ctx.moveTo(player.x, player.y - arm);
+      ctx.lineTo(player.x, player.y + arm);
+      ctx.stroke();
       ctx.restore();
     }
 
@@ -582,8 +618,10 @@
     requestAnimationFrame(loop);
   }
   window.addEventListener('resize', resize);
+  loadProgress();
   resize();
-  resetGame(1);
+  resetGame(level);
+  renderWins();
   requestAnimationFrame(function(now){ last = now; requestAnimationFrame(loop); });
 })();
 </script>
