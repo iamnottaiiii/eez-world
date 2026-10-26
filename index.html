@@ -1,194 +1,577 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-<meta name="theme-color" content="#000000" />
-<title>eez.world</title>
-<meta name="description" content="eez.world. Drift through the void, eat the dots, keep growing. The apps live at eez.world/eez and eez.world/unet." />
-<meta property="og:title" content="eez.world" />
-<meta property="og:description" content="Drift through the void, eat the dots, keep growing." />
-<meta property="og:url" content="https://eez.world/" />
-<meta property="og:type" content="website" />
-<link rel="icon" href="eez/icons/eez.svg" type="image/svg+xml" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<link rel="icon" href="data:," />
+<title>Destination</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; }
-  body {
-    background: #000; color: #F2F2F5;
-    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-    overflow: hidden;
+  :root{
+    --bg:#070708;
+    --text:#f5f1e8;
+    --amber:#ffd166;
+    --red:#ff4757;
+    --green:#8affc1;
   }
-  /* The bjvfi void: layered rings and a soft light well, plus a vignette. */
-  .void { --cx: 50%; --cy: 50%; position: fixed; inset: 0; overflow: hidden; background: #000; }
-  .void::before {
-    content: ""; position: absolute; inset: 0;
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:"Outfit", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    overflow:hidden;
+  }
+  .stage{
+    position:fixed;inset:0;
     background:
-      repeating-conic-gradient(from 0deg at var(--cx) var(--cy),
-        rgba(255,255,255,.012) 0deg 1deg,
-        transparent 1deg 2deg),
-      repeating-radial-gradient(circle at var(--cx) var(--cy),
-        rgba(255,255,255,.010) 0px 1px,
-        transparent 1px 4px),
-      radial-gradient(circle at var(--cx) var(--cy),
-        #000 0%, #000 6%, #010101 11%, #050505 18%, #0d0d0d 26%,
-        #161616 36%, #1f1f1f 48%, #262626 62%, #1f1f1f 78%,
-        #0d0d0d 92%, #030303 100%);
-    background-size: auto, auto, cover;
-    pointer-events: none;
+      radial-gradient(700px 500px at 50% 42%, rgba(255,255,255,.045), transparent 60%),
+      #070708;
+    overflow:hidden;
   }
-  .void::after {
-    content: ""; position: absolute; inset: 0; z-index: 3;
-    background: radial-gradient(circle at var(--cx) var(--cy),
-      transparent 0%, transparent 40%,
-      rgba(0,0,0,.35) 75%, rgba(0,0,0,.95) 100%);
-    pointer-events: none;
+  canvas{
+    position:absolute;inset:0;width:100%;height:100%;display:block;
+    touch-action:none;
+    cursor:crosshair;
   }
-  canvas { position: absolute; inset: 0; z-index: 1; display: block; touch-action: none; cursor: crosshair; }
-  .hud {
-    position: absolute; z-index: 4; pointer-events: none;
-    text-shadow: 0 0 18px rgba(0,0,0,.9);
+
+  /* The one quiet marker: how far along the path you are */
+  .pips{
+    position:absolute;left:50%;bottom:18px;transform:translateX(-50%);
+    display:flex;gap:7px;z-index:2;pointer-events:none;
   }
-  .mark {
-    top: 22px; left: 26px; font-size: 1.35rem; font-weight: 500; letter-spacing: -.05em;
+  .pips i{
+    width:7px;height:7px;border-radius:50%;
+    background:rgba(255,255,255,.18);
+    transition:background .3s;
   }
-  .mark small { display: block; margin-top: 6px; font-size: .72rem; color: #8a8f9c; letter-spacing: 0; font-weight: 400; }
-  .score { top: 22px; right: 26px; text-align: right; font-size: .85rem; color: #c9ccd4; }
-  .score b { color: #fff; font-weight: 700; }
+  .pips i.done{background:var(--amber)}
+  .pips i.now{background:#fff;box-shadow:0 0 8px rgba(255,255,255,.8)}
+  .pips[hidden]{display:none}
+
+  /* Overlays: one line, one button, nothing else */
+  .overlay{
+    position:absolute;inset:0;z-index:4;
+    display:flex;align-items:center;justify-content:center;
+    padding:18px;
+    background:radial-gradient(700px 500px at 50% 40%, rgba(0,0,0,.15), rgba(0,0,0,.55));
+  }
+  .overlay[hidden]{display:none}
+  .card{text-align:center;width:min(440px,100%)}
+  .card h1{
+    margin:0 0 10px;font-size:40px;line-height:1.02;letter-spacing:-.02em;font-weight:900;
+  }
+  .card h1 em{font-style:normal;color:var(--amber)}
+  .card.fail h1 em{color:var(--red)}
+  .card.win h1 em{color:var(--green)}
+  .card p{margin:0;color:#c9c5bb;line-height:1.5;font-size:15px}
+  .btn{
+    appearance:none;border:0;
+    background:var(--amber);color:#1a1400;
+    padding:14px 34px;border-radius:999px;
+    font-family:inherit;font-weight:700;font-size:16px;
+    cursor:pointer;margin-top:22px;
+  }
+  .btn:hover{background:#ffdc85}
+  .btn:active{transform:translateY(1px)}
 </style>
 </head>
 <body>
-<div class="void">
-  <canvas id="game" aria-label="A small game. Move to drift through the void and eat dots to grow."></canvas>
-  <div class="hud mark">eez.world<small>move to drift. eat the dots. keep growing.</small></div>
-  <div class="hud score">size <b id="size">10</b> · eaten <b id="eaten">0</b></div>
-</div>
+<main class="stage" id="stage">
+  <canvas id="game"></canvas>
+
+  <div class="pips" id="pips" hidden></div>
+
+  <div class="overlay" id="overlayStart">
+    <div class="card">
+      <h1>Follow the path.<br><em>Touch nothing.</em></h1>
+      <p>Things hunt you from every side. Reach each light, then the destination.</p>
+      <button class="btn" id="btnStart" type="button">Start</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlayFail" hidden>
+    <div class="card fail">
+      <h1>You got <em>hit.</em></h1>
+      <p id="failText">Something caught you.</p>
+      <button class="btn" id="btnRetry" type="button">Try again</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlayWin" hidden>
+    <div class="card win">
+      <h1>You <em>made it.</em></h1>
+      <p>The next path is longer, and they hunt harder.</p>
+      <button class="btn" id="btnAgain" type="button">Next path</button>
+    </div>
+  </div>
+</main>
+
 <script>
-(function () {
-  var canvas = document.getElementById("game");
-  var ctx = canvas.getContext("2d");
-  var voidEl = document.querySelector(".void");
-  var sizeEl = document.getElementById("size");
-  var eatenEl = document.getElementById("eaten");
+(function(){
+  var canvas = document.getElementById('game');
+  var ctx = canvas.getContext('2d');
+  var stage = document.getElementById('stage');
+  var pipsEl = document.getElementById('pips');
+  var overlayStart = document.getElementById('overlayStart');
+  var overlayFail = document.getElementById('overlayFail');
+  var overlayWin = document.getElementById('overlayWin');
+  var failText = document.getElementById('failText');
 
   var W = 0, H = 0, DPR = 1;
-  var pellets = [];
-  var eaten = 0;
-  var coreR = 26;                  // the bright heart of the light, grows as you eat
-  var MAX_CORE = 120;
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function dist(x1,y1,x2,y2){ var dx=x2-x1, dy=y2-y1; return Math.sqrt(dx*dx+dy*dy); }
+
+  // ---------- state ----------
+  var state = 'ready'; // ready | playing | failed | won
+  var player = { x:0, y:0, tx:0, ty:0, r:14 };
   var keys = {};
+  var hunters = [];
+  var particles = [];
+  var stars = [];
+  var path = [];        // waypoint points; the last one is the destination
+  var wpIndex = 0;      // which waypoint is lit now
+  var level = 1;
+  var elapsed = 0;
+  var spawnTimer = 0;
+  var shake = 0;
+  var audioCtx = null;
 
-  // The bjvfi way: the light center is a pair of percentages that ease
-  // after the pointer. The background gradients are centered on them, so
-  // the whole light well glides across the screen. There is no ball.
-  var tx = 50, ty = 50, cx = 50, cy = 50;
-  function point(x, y) {
-    var r = voidEl.getBoundingClientRect();
-    tx = ((x - r.left) / r.width) * 100;
-    ty = ((y - r.top) / r.height) * 100;
+  function resize(){
+    var r = stage.getBoundingClientRect();
+    W = Math.max(300, Math.floor(r.width));
+    H = Math.max(300, Math.floor(r.height));
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    player.x = clamp(player.x, player.r+6, W-player.r-6);
+    player.y = clamp(player.y, player.r+6, H-player.r-6);
+    player.tx = clamp(player.tx, player.r+4, W-player.r-4);
+    player.ty = clamp(player.ty, player.r+4, H-player.r-4);
+    makeStars();
+    if(state==='ready') buildPath();
   }
-  document.addEventListener("mousemove", function (e) { point(e.clientX, e.clientY); }, { passive: true });
-  document.addEventListener("touchmove", function (e) {
-    if (e.touches && e.touches[0]) point(e.touches[0].clientX, e.touches[0].clientY);
-  }, { passive: true });
-  document.addEventListener("mouseleave", function () { tx = 50; ty = 50; });
-  document.addEventListener("keydown", function (e) { keys[e.key.toLowerCase()] = true; });
-  document.addEventListener("keyup", function (e) { keys[e.key.toLowerCase()] = false; });
 
-  function pelletCount() { return Math.max(60, Math.min(150, Math.round(W * H / 15000))); }
-  function newPellet() {
+  // ---------- sound (quiet feedback only) ----------
+  function ensureAudio(){
+    try{
+      if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if(audioCtx.state==='suspended') audioCtx.resume();
+      return audioCtx;
+    }catch(e){ return null; }
+  }
+  function beep(freq, dur, type, vol, delay){
+    var ac = ensureAudio(); if(!ac) return;
+    var t = ac.currentTime + (delay || 0);
+    var o = ac.createOscillator(); var g = ac.createGain();
+    o.type = type || 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol || 0.07, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t); o.stop(t + dur);
+  }
+  function soundHit(){ beep(140,.28,'sawtooth',.11); beep(70,.35,'square',.08,.06); }
+  function soundStep(){ beep(660,.1,'sine',.05); beep(880,.14,'sine',.05,.07); }
+  function soundWin(){ beep(523,.14,'sine',.08); beep(659,.14,'sine',.08,.11); beep(784,.24,'sine',.09,.22); }
+
+  // ---------- path ----------
+  // A winding route across the whole field. Each new leg turns hard away
+  // from the last one, so the run is never a straight climb.
+  function buildPath(){
+    path = [];
+    var total = 4 + level; // waypoints including the destination
+    var margin = 64;
+    var minX = margin, maxX = W - margin, minY = margin, maxY = H - margin - 24;
+    var px = W/2, py = H - 70; // player home
+    var prevAngle = -Math.PI/2;
+    for(var i=0;i<total;i++){
+      var isLast = (i === total-1);
+      var frac = (i+1)/total;
+      // legs get longer as the path goes on
+      var legLen = clamp(Math.min(W,H) * (0.34 + frac*0.30) * rand(0.85, 1.1), 120, Math.max(W,H)*0.72);
+      var x = px, y = py, tries = 0;
+      do {
+        // force a real turn: well away from the previous leg's direction
+        var turn = rand(0.9, 2.4) * (Math.random() < 0.5 ? -1 : 1);
+        var ang = prevAngle + turn;
+        x = clamp(px + Math.cos(ang)*legLen, minX, maxX);
+        y = clamp(py + Math.sin(ang)*legLen, minY, maxY);
+        tries++;
+      } while(dist(px,py,x,y) < 130 && tries < 14);
+      prevAngle = Math.atan2(y-py, x-px);
+      path.push({ x:x, y:y, last:isLast });
+      px = x; py = y;
+    }
+    wpIndex = 0;
+    renderPips();
+  }
+  function renderPips(){
+    pipsEl.innerHTML = '';
+    for(var i=0;i<path.length;i++){
+      var dot = document.createElement('i');
+      if(i < wpIndex) dot.className = 'done';
+      else if(i === wpIndex) dot.className = 'now';
+      pipsEl.appendChild(dot);
+    }
+  }
+
+  function makeStars(){
+    stars = [];
+    var n = Math.floor((W*H)/15000);
+    for(var i=0;i<n;i++) stars.push({x:Math.random()*W, y:Math.random()*H, r:Math.random()*1.3+.4, a:Math.random()*.45+.12});
+  }
+
+  function resetPositions(){
+    player.x = W/2; player.y = H - 70;
+    player.tx = player.x; player.ty = player.y;
+  }
+  function resetGame(lv){
+    level = lv;
+    hunters = []; particles = [];
+    elapsed = 0; spawnTimer = 500; shake = 0;
+    resetPositions();
+    buildPath();
+  }
+  function startRun(lv){
+    ensureAudio();
+    resetGame(lv);
+    state = 'playing';
+    overlayStart.hidden = true; overlayFail.hidden = true; overlayWin.hidden = true;
+    pipsEl.hidden = false;
+  }
+  function showStart(){
+    state = 'ready';
+    resetGame(1);
+    overlayStart.hidden = false; overlayFail.hidden = true; overlayWin.hidden = true;
+    pipsEl.hidden = true;
+  }
+  function fail(){
+    state = 'failed'; shake = 14; soundHit();
+    burst(player.x, player.y, '#ff4757', 26);
+    burst(player.x, player.y, '#ffffff', 12);
+    var left = path.length - wpIndex;
+    failText.textContent = left <= 1
+      ? 'Caught you right at the destination.'
+      : (wpIndex === 0
+        ? 'Something caught you before the first light.'
+        : 'Something caught you on the way.');
+    overlayFail.hidden = false;
+    pipsEl.hidden = true;
+  }
+  function win(){
+    state = 'won'; soundWin();
+    var d = path[path.length-1];
+    burst(d.x, d.y, '#8affc1', 30);
+    burst(d.x, d.y, '#ffd166', 22);
+    overlayWin.hidden = false;
+    pipsEl.hidden = true;
+  }
+  function reachWaypoint(){
+    var wp = path[wpIndex];
+    burst(wp.x, wp.y, wp.last ? '#8affc1' : '#ffd166', 18);
+    if(wp.last){ win(); return; }
+    soundStep();
+    wpIndex++;
+    renderPips();
+    // every light you reach makes them come harder
+    spawnTimer = Math.min(spawnTimer, 260);
+  }
+
+  // ---------- hunters ----------
+  // They enter from any edge and steer toward you. The further along the
+  // path (and the higher the level), the faster they are, the harder they
+  // turn, and the more of them there are.
+  function difficulty(){
+    var stageFrac = path.length ? wpIndex / path.length : 0;
     return {
-      x: 24 + Math.random() * Math.max(10, W - 48),
-      y: 24 + Math.random() * Math.max(10, H - 48),
-      r: 3 + Math.random() * 4,
-      warm: Math.random() < 0.16
+      speed: 1.45 + (level-1)*0.22 + stageFrac*1.15 + elapsed*0.008,
+      turn: 0.020 + (level-1)*0.003 + stageFrac*0.022,   // radians per frame of steering
+      interval: clamp(760 - (level-1)*60 - stageFrac*330 - elapsed*2.4, 235, 760)
     };
   }
-  function seed() {
-    pellets = [];
-    var n = pelletCount();
-    for (var i = 0; i < n; i++) pellets.push(newPellet());
+  function spawnHunter(){
+    var d = difficulty();
+    // pick any edge: top, bottom, left, right
+    var edge = Math.floor(Math.random()*4);
+    var x, y;
+    if(edge===0){ x = rand(0,W); y = -30; }
+    else if(edge===1){ x = rand(0,W); y = H+30; }
+    else if(edge===2){ x = -30; y = rand(0,H); }
+    else { x = W+30; y = rand(0,H); }
+    var ang = Math.atan2(player.y - y, player.x - x);
+    // chargers fly straight, hunters steer, seekers steer hard
+    var roll = Math.random();
+    var kind, steerMul;
+    if(roll < 0.22){ kind = 'charger'; steerMul = 0; }
+    else if(roll < 0.82){ kind = 'hunter'; steerMul = 1; }
+    else { kind = 'seeker'; steerMul = 1.7; }
+    var r = kind==='seeker' ? rand(9,13) : rand(11,19);
+    hunters.push({
+      kind: kind, x:x, y:y, r:r,
+      ang: ang,
+      speed: d.speed * rand(0.85, 1.25) * (kind==='seeker' ? 0.92 : 1),
+      turn: d.turn * steerMul,
+      rot: rand(0, Math.PI*2), vr: rand(-.04,.04),
+      wob: rand(0, Math.PI*2)
+    });
   }
-  function resize() {
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = window.innerWidth; H = window.innerHeight;
-    canvas.width = Math.round(W * DPR);
-    canvas.height = Math.round(H * DPR);
-    canvas.style.width = W + "px";
-    canvas.style.height = H + "px";
-    seed();
+  function collides(h){
+    var dx = player.x - h.x, dy = player.y - h.y;
+    var rr = (player.r * 0.88) + (h.r * 0.82);
+    return (dx*dx + dy*dy) < rr*rr;
   }
-  window.addEventListener("resize", resize);
 
-  function step() {
-    var kstep = 1.6;
-    if (keys["arrowleft"] || keys["a"]) tx -= kstep;
-    if (keys["arrowright"] || keys["d"]) tx += kstep;
-    if (keys["arrowup"] || keys["w"]) ty -= kstep;
-    if (keys["arrowdown"] || keys["s"]) ty += kstep;
-    tx = Math.max(0, Math.min(100, tx));
-    ty = Math.max(0, Math.min(100, ty));
-    cx += (tx - cx) * 0.055;       // same ease as bjvfi
-    cy += (ty - cy) * 0.055;
-    voidEl.style.setProperty("--cx", cx + "%");
-    voidEl.style.setProperty("--cy", cy + "%");
+  function burst(x,y,color,n){
+    for(var i=0;i<n;i++){
+      var a = Math.random()*Math.PI*2, s = rand(1,4.2);
+      particles.push({x:x,y:y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,decay:rand(.015,.035),r:rand(1.5,3.5),color:color});
+    }
+  }
 
-    // Eating: a dot inside the light's bright core gets eaten.
-    var px = cx / 100 * W, py = cy / 100 * H;
-    for (var i = 0; i < pellets.length; i++) {
-      var p = pellets[i];
-      var dx = p.x - px, dy = p.y - py;
-      var rr = coreR + p.r * 0.4;
-      if (dx * dx + dy * dy < rr * rr) {
-        if (coreR < MAX_CORE) coreR = Math.min(MAX_CORE, Math.sqrt(coreR * coreR + p.r * p.r * 2.2));
-        eaten++;
-        pellets[i] = newPellet();
-        sizeEl.textContent = Math.round(coreR * 2);
-        eatenEl.textContent = eaten;
+  // ---------- input: the light glides after the pointer ----------
+  function setTargetFromEvent(e){
+    var r = canvas.getBoundingClientRect();
+    var cx, cy;
+    if(e.touches && e.touches[0]){ cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+    else { cx = e.clientX; cy = e.clientY; }
+    player.tx = clamp(cx - r.left, player.r+4, W-player.r-4);
+    player.ty = clamp(cy - r.top, player.r+4, H-player.r-4);
+  }
+  canvas.addEventListener('pointerdown', function(e){ setTargetFromEvent(e); ensureAudio(); });
+  window.addEventListener('pointermove', function(e){ if(state==='playing' || state==='ready') setTargetFromEvent(e); });
+  canvas.addEventListener('touchmove', function(e){ e.preventDefault(); setTargetFromEvent(e); }, {passive:false});
+
+  window.addEventListener('keydown', function(e){
+    keys[e.key.toLowerCase()] = true;
+    if(e.key===' '){
+      e.preventDefault();
+      if(state==='ready') startRun(1);
+      else if(state==='failed') startRun(level);
+      else if(state==='won') startRun(level+1);
+    }
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].indexOf(e.key) >= 0) e.preventDefault();
+  });
+  window.addEventListener('keyup', function(e){ keys[e.key.toLowerCase()] = false; });
+
+  document.getElementById('btnStart').addEventListener('click', function(){ startRun(1); });
+  document.getElementById('btnRetry').addEventListener('click', function(){ startRun(level); });
+  document.getElementById('btnAgain').addEventListener('click', function(){ startRun(level+1); });
+
+  // ---------- drawing ----------
+  function drawPath(now){
+    if(!path.length) return;
+    // faint dotted route from where you are through the remaining lights
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,.10)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([2, 9]);
+    ctx.beginPath();
+    ctx.moveTo(player.x, player.y);
+    for(var i=wpIndex;i<path.length;i++) ctx.lineTo(path[i].x, path[i].y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    for(var j=0;j<path.length;j++){
+      var wp = path[j];
+      var isNow = (j === wpIndex);
+      var isDone = (j < wpIndex);
+      ctx.save();
+      ctx.globalAlpha = isDone ? 0.25 : (isNow ? 1 : 0.45);
+      var rad = wp.last ? 26 : 18;
+      var pulse = isNow ? (0.8 + Math.sin(now*0.005)*0.2) : 1;
+      var col = wp.last ? '138,255,193' : '255,209,102';
+      // glow
+      var grad = ctx.createRadialGradient(wp.x, wp.y, 2, wp.x, wp.y, rad*2.4);
+      grad.addColorStop(0, 'rgba(' + col + ',' + (0.35*pulse) + ')');
+      grad.addColorStop(1, 'rgba(' + col + ',0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(wp.x, wp.y, rad*2.4, 0, Math.PI*2); ctx.fill();
+      // ring
+      ctx.strokeStyle = wp.last ? '#8affc1' : '#ffd166';
+      ctx.lineWidth = isNow ? 2.4 : 1.6;
+      ctx.beginPath(); ctx.arc(wp.x, wp.y, rad*pulse, 0, Math.PI*2); ctx.stroke();
+      // core
+      ctx.fillStyle = wp.last ? '#8affc1' : '#ffd166';
+      ctx.beginPath(); ctx.arc(wp.x, wp.y, 3.4, 0, Math.PI*2); ctx.fill();
+      if(wp.last && isNow){
+        ctx.fillStyle = '#8affc1';
+        ctx.font = '700 10px "Outfit", sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.fillText('DESTINATION', wp.x, wp.y + rad + 8);
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawHunter(h){
+    ctx.save();
+    ctx.translate(h.x, h.y);
+    if(h.kind === 'charger'){
+      ctx.rotate(h.rot);
+      ctx.fillStyle = '#ff4757';
+      ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, -h.r); ctx.lineTo(h.r*0.85, 0); ctx.lineTo(0, h.r); ctx.lineTo(-h.r*0.85, 0);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(0,0,0,.22)';
+      ctx.beginPath(); ctx.arc(0,0,3.2,0,Math.PI*2); ctx.fill();
+    } else if(h.kind === 'seeker'){
+      ctx.rotate(h.ang + Math.PI/2);
+      ctx.fillStyle = '#ff6b35';
+      ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, -h.r-3); ctx.lineTo(h.r*0.75, h.r); ctx.lineTo(0, h.r*0.55); ctx.lineTo(-h.r*0.75, h.r);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else { // hunter orb
+      ctx.fillStyle = '#111214';
+      ctx.strokeStyle = '#ff4757'; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.arc(0,0,h.r,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#ff4757';
+      ctx.beginPath(); ctx.arc(0,0,3.4,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,71,87,.7)'; ctx.lineWidth = 1.4;
+      for(var sp=0; sp<6; sp++){
+        var a = sp*Math.PI/3 + h.rot;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a)*h.r, Math.sin(a)*h.r);
+        ctx.lineTo(Math.cos(a)*(h.r+4), Math.sin(a)*(h.r+4));
+        ctx.stroke();
       }
     }
+    ctx.restore();
+    // streak behind it, pointing the way it travels
+    ctx.save();
+    ctx.globalAlpha = .16; ctx.strokeStyle = '#ff4757'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(h.x - Math.cos(h.ang)*(h.r+4), h.y - Math.sin(h.ang)*(h.r+4));
+    ctx.lineTo(h.x - Math.cos(h.ang)*(h.r+16+h.speed*3), h.y - Math.sin(h.ang)*(h.r+16+h.speed*3));
+    ctx.stroke();
+    ctx.restore();
   }
 
-  function draw() {
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    ctx.clearRect(0, 0, W, H);
-    var px = cx / 100 * W, py = cy / 100 * H;
+  // ---------- main loop ----------
+  var last = performance.now();
+  function loop(now){
+    var dtMs = now - last; last = now;
+    var dt = clamp(dtMs/16.667, 0.4, 2.2);
+    var dtSec = dtMs/1000;
 
-    // The dots sit still on the void. Only the light moves.
-    for (var i = 0; i < pellets.length; i++) {
-      var p = pellets[i];
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fillStyle = p.warm ? "rgba(255,196,110,0.9)" : "rgba(230,233,240,0.75)";
-      ctx.fill();
+    ctx.clearRect(0,0,W,H);
+
+    var sx = 0, sy = 0;
+    if(shake > 0){ sx = rand(-shake,shake)*0.4; sy = rand(-shake,shake)*0.4; shake *= 0.88; if(shake<0.4) shake = 0; }
+    ctx.save(); ctx.translate(sx,sy);
+
+    // stars
+    ctx.save();
+    for(var i=0;i<stars.length;i++){
+      var s = stars[i];
+      ctx.globalAlpha = s.a; ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+
+    drawPath(now);
+
+    if(state === 'playing'){
+      elapsed += dtSec;
+
+      // keys nudge the target
+      var kStep = 13 * dt;
+      var keyed = false;
+      if(keys['arrowleft']||keys['a']){ player.tx -= kStep; keyed = true; }
+      if(keys['arrowright']||keys['d']){ player.tx += kStep; keyed = true; }
+      if(keys['arrowup']||keys['w']){ player.ty -= kStep; keyed = true; }
+      if(keys['arrowdown']||keys['s']){ player.ty += kStep; keyed = true; }
+      if(keyed){
+        player.tx = clamp(player.tx, player.r+4, W-player.r-4);
+        player.ty = clamp(player.ty, player.r+4, H-player.r-4);
+      }
+
+      // the light glides after its target
+      var ease = 1 - Math.pow(1 - 0.14, dt);
+      player.x += (player.tx - player.x) * ease;
+      player.y += (player.ty - player.y) * ease;
+      player.x = clamp(player.x, player.r+4, W-player.r-4);
+      player.y = clamp(player.y, player.r+4, H-player.r-4);
+
+      // spawning, faster and thicker the further you get
+      spawnTimer -= dtMs;
+      if(spawnTimer <= 0){
+        spawnHunter();
+        if(wpIndex >= 2 && Math.random() < 0.3) spawnHunter();
+        if(level >= 3 && Math.random() < 0.25) spawnHunter();
+        spawnTimer = difficulty().interval * rand(0.72, 1.2);
+      }
+
+      // hunters steer toward you
+      for(var j=hunters.length-1;j>=0;j--){
+        var h = hunters[j];
+        var want = Math.atan2(player.y - h.y, player.x - h.x);
+        var diff = want - h.ang;
+        while(diff > Math.PI) diff -= Math.PI*2;
+        while(diff < -Math.PI) diff += Math.PI*2;
+        h.ang += clamp(diff, -h.turn*dt, h.turn*dt);
+        h.wob += 0.03*dt;
+        var wob = h.kind==='charger' ? Math.sin(h.wob)*0.15 : 0;
+        h.x += Math.cos(h.ang + wob) * h.speed * dt;
+        h.y += Math.sin(h.ang + wob) * h.speed * dt;
+        h.rot += h.vr * dt * 10;
+
+        if(collides(h)){ fail(); break; }
+        if(h.x < -140 || h.x > W+140 || h.y < -140 || h.y > H+140) hunters.splice(j,1);
+      }
+
+      // reaching the lit waypoint
+      if(state === 'playing' && path[wpIndex]){
+        var wp = path[wpIndex];
+        var need = (wp.last ? 26 : 18) + player.r * 0.55;
+        if(dist(player.x, player.y, wp.x, wp.y) < need) reachWaypoint();
+      }
     }
 
-    // The bright heart of the light, soft, drawn where the center is.
-    var glow = ctx.createRadialGradient(px, py, 0, px, py, coreR * 2.6);
-    glow.addColorStop(0, "rgba(255,255,255,0.28)");
-    glow.addColorStop(0.45, "rgba(255,255,255,0.07)");
-    glow.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.beginPath();
-    ctx.arc(px, py, coreR * 2.6, 0, Math.PI * 2);
-    ctx.fillStyle = glow;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(px, py, coreR * 0.5, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.22)";
-    ctx.fill();
-  }
+    for(var k=0;k<hunters.length;k++) drawHunter(hunters[k]);
 
-  function frame() {
-    step();
-    draw();
-    requestAnimationFrame(frame);
+    // particles
+    for(var p=particles.length-1;p>=0;p--){
+      var pt = particles[p];
+      pt.x += pt.vx*dt; pt.y += pt.vy*dt; pt.vy += 0.04*dt; pt.life -= pt.decay*dt;
+      if(pt.life <= 0){ particles.splice(p,1); continue; }
+      ctx.save(); ctx.globalAlpha = Math.max(0, pt.life); ctx.fillStyle = pt.color;
+      ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI*2); ctx.fill(); ctx.restore();
+    }
+
+    // player light
+    if(state !== 'failed'){
+      ctx.save();
+      var pg = ctx.createRadialGradient(player.x, player.y, 1, player.x, player.y, 52);
+      pg.addColorStop(0, 'rgba(255,247,204,.95)');
+      pg.addColorStop(0.28, 'rgba(255,209,102,.55)');
+      pg.addColorStop(1, 'rgba(255,209,102,0)');
+      ctx.fillStyle = pg;
+      ctx.beginPath(); ctx.arc(player.x, player.y, 52, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#fffbe6'; ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#111';
+      ctx.beginPath(); ctx.arc(player.x, player.y, 3.6, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.restore();
+    requestAnimationFrame(loop);
   }
+  window.addEventListener('resize', resize);
   resize();
-  sizeEl.textContent = Math.round(coreR * 2);
-  requestAnimationFrame(frame);
+  resetGame(1);
+  requestAnimationFrame(function(now){ last = now; requestAnimationFrame(loop); });
 })();
 </script>
 </body>
