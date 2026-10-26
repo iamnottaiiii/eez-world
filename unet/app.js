@@ -800,13 +800,13 @@
 
 /* ================= unet GitHub data layer =================
    Replaces the original server-side backend. No server code runs in this build.
-   Storage: JSON files in the private iamnottaiiii/unet-data repo,
+   Storage: JSON files in the private iamnottaiiii/eez-data repo,
    read/written through the GitHub API with the repo-scoped token
    from config.js (EEZ_GH_TOKEN). Same patterns as SiteDesk.
    Timestamps are stored as SECONDS since epoch in the repo and
    converted to ms at the API boundary (the UI works in ms). */
 
-var GH_API = 'https://api.github.com/repos/iamnottaiiii/unet-data';
+var GH_API = 'https://api.github.com/repos/iamnottaiiii/eez-data';
 var FEED_CAP = 200;
 var LS_SESSION = 'unet_session_v1';
 var LS_FEED_READ = 'unet_feed_read_v1';
@@ -1263,7 +1263,7 @@ async function ghThreadData(id, me, touch){
   return {conversation: view, messages: msgs};
 }
 
-/* ---- uploads: commit image files to images/ in unet-data ---- */
+/* ---- uploads: commit image files to images/ in eez-data ---- */
 function downscaleImage(file){
   return new Promise(function(resolve, reject){
     var img = new Image();
