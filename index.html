@@ -1,104 +1,222 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#000000" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="eez" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <title>eez - meet people through what you do</title>
-  <meta name="description" content="eez is a free social app for meeting new people without bias. Weekly real-world challenges in small groups. No photos, no names, no profiles. Not dating." />
-  <meta property="og:title" content="eez" />
-  <meta property="og:description" content="Meet new people through what you do. Weekly real-world challenges, no photos, no names." />
-  <meta property="og:url" content="https://eez.world/" />
-  <meta property="og:type" content="website" />
-  <meta property="og:image" content="https://eez.world/icons/eez.svg" />
-  <script>
-    (function () {
-      try {
-        // Base look is always dark. A saved whole-UI theme applies before first paint.
-        document.documentElement.setAttribute("data-theme", "dark");
-        document.documentElement.style.colorScheme = "dark";
-        var ut = localStorage.getItem("eez_uitheme");
-        if (["midnight", "paper", "ocean", "custom"].indexOf(ut) >= 0) {
-          document.documentElement.setAttribute("data-uitheme", ut);
-        }
-      } catch (e) {}
-    })();
-  </script>
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="icon" href="icons/eez.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="icons/eez.svg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="preconnect" href="https://api.github.com" />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=12" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="theme-color" content="#000000" />
+<title>eez.world</title>
+<meta name="description" content="eez.world. Drift through the void, eat the dots, keep growing. The apps live at eez.world/eez and eez.world/unet." />
+<meta property="og:title" content="eez.world" />
+<meta property="og:description" content="Drift through the void, eat the dots, keep growing." />
+<meta property="og:url" content="https://eez.world/" />
+<meta property="og:type" content="website" />
+<link rel="icon" href="eez/icons/eez.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: #000; color: #F2F2F5;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow: hidden;
+  }
+  /* The bjvfi void: layered rings and a soft light well, plus a vignette. */
+  .void { position: fixed; inset: 0; overflow: hidden; background: #000; }
+  .void::before {
+    content: ""; position: absolute; inset: 0;
+    background:
+      repeating-conic-gradient(from 0deg at 50% 50%,
+        rgba(255,255,255,.012) 0deg 1deg,
+        transparent 1deg 2deg),
+      repeating-radial-gradient(circle at 50% 50%,
+        rgba(255,255,255,.010) 0px 1px,
+        transparent 1px 4px),
+      radial-gradient(circle at 50% 50%,
+        #000 0%, #000 6%, #010101 11%, #050505 18%, #0d0d0d 26%,
+        #161616 36%, #1f1f1f 48%, #262626 62%, #1f1f1f 78%,
+        #0d0d0d 92%, #030303 100%);
+    background-size: auto, auto, cover;
+    pointer-events: none;
+  }
+  .void::after {
+    content: ""; position: absolute; inset: 0; z-index: 3;
+    background: radial-gradient(circle at 50% 50%,
+      transparent 0%, transparent 40%,
+      rgba(0,0,0,.35) 75%, rgba(0,0,0,.95) 100%);
+    pointer-events: none;
+  }
+  canvas { position: absolute; inset: 0; z-index: 1; display: block; touch-action: none; cursor: crosshair; }
+  .hud {
+    position: absolute; z-index: 4; pointer-events: none;
+    text-shadow: 0 0 18px rgba(0,0,0,.9);
+  }
+  .mark {
+    top: 22px; left: 26px; font-size: 1.35rem; font-weight: 500; letter-spacing: -.05em;
+  }
+  .mark small { display: block; margin-top: 6px; font-size: .72rem; color: #8a8f9c; letter-spacing: 0; font-weight: 400; }
+  .score { top: 22px; right: 26px; text-align: right; font-size: .85rem; color: #c9ccd4; }
+  .score b { color: #fff; font-weight: 700; }
+  .apps {
+    position: absolute; z-index: 4; left: 50%; bottom: 26px; transform: translateX(-50%);
+    display: flex; gap: 10px; align-items: center;
+  }
+  .apps a {
+    pointer-events: auto; color: #F2F2F5; text-decoration: none;
+    border: 1px solid rgba(255,255,255,.28); border-radius: 999px;
+    padding: 9px 22px; font-size: .85rem; background: rgba(0,0,0,.45);
+  }
+  .apps a:hover, .apps a:focus-visible { background: rgba(255,255,255,.1); outline: none; }
+  .apps span { color: #6B7080; font-size: .75rem; }
+</style>
 </head>
 <body>
-  <div class="app-shell">
-    <a class="a11y-jump" href="#app">jump to content</a>
-    <button type="button" class="brand-word" id="brand-share" aria-label="share eez">eez</button>
-    <button type="button" class="alerts-btn" id="alerts-btn" aria-label="alerts" hidden>alerts<span class="alerts-dot" id="alerts-dot" hidden></span></button>
-    <div id="alerts-panel" class="alerts-panel" hidden>
-      <div class="alerts-head"><strong>alerts</strong><button type="button" class="btn ghost sm" id="alerts-clear">mark read</button></div>
-      <div id="alerts-list" class="alerts-list"><p class="hint">nothing yet</p></div>
-    </div>
-    <main id="app" class="app" tabindex="-1"></main>
+<div class="void">
+  <canvas id="game" aria-label="A small game. Move to drift through the void and eat dots to grow."></canvas>
+  <div class="hud mark">eez.world<small>move to drift. eat the dots. keep growing.</small></div>
+  <div class="hud score">size <b id="size">10</b> · eaten <b id="eaten">0</b></div>
+  <nav class="apps" aria-label="the apps">
+    <span>the apps:</span>
+    <a href="/eez/">eez</a>
+    <a href="/unet/">unet</a>
+  </nav>
+</div>
+<script>
+(function () {
+  var canvas = document.getElementById("game");
+  var ctx = canvas.getContext("2d");
+  var sizeEl = document.getElementById("size");
+  var eatenEl = document.getElementById("eaten");
 
-    <nav class="bottom-nav" aria-label="primary mobile">
-      <a href="#/" data-nav="home">home</a>
-      <a href="#/qa" data-nav="qa">q&amp;a</a>
-      <a href="#/weekly" data-nav="weekly">weekly</a>
-      <a href="#/messages" data-nav="messages">inbox</a>
-      <a href="#/you" data-nav="you">you</a>
-    </nav>
+  var W = 0, H = 0, DPR = 1;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+  }
+  window.addEventListener("resize", resize);
+  resize();
 
-    <div id="share-sheet" class="share-sheet" hidden>
-      <div class="share-card" role="dialog" aria-modal="true" aria-labelledby="share-title">
-        <h2 id="share-title">Share eez</h2>
-        <p class="hint">Your link puts them in your weekly group.</p>
-        <div class="row-btns">
-          <button type="button" class="btn primary" id="share-native">share</button>
-          <button type="button" class="btn" id="share-copy">copy link</button>
-          <button type="button" class="btn ghost" id="share-dismiss">not now</button>
-        </div>
-      </div>
-    </div>
+  var WORLD = 3600;               // the void is bigger than the screen
+  var PELLETS = 420;
+  var pellets = [];
+  function newPellet() {
+    return {
+      x: Math.random() * WORLD,
+      y: Math.random() * WORLD,
+      r: 3 + Math.random() * 4,
+      warm: Math.random() < 0.16    // a few warm dots among the pale ones
+    };
+  }
+  for (var i = 0; i < PELLETS; i++) pellets.push(newPellet());
 
-    <div id="install-sheet" class="install-sheet" hidden>
-      <div class="install-card" role="dialog" aria-modal="true" aria-labelledby="install-title">
-        <h2 id="install-title">Install eez</h2>
-        <p class="hint">Add eez to your home screen for a quieter, app-like feel.</p>
-        <div class="row-btns">
-          <button type="button" class="btn primary" id="install-accept">install</button>
-          <button type="button" class="btn" id="install-dismiss">not now</button>
-        </div>
-      </div>
-    </div>
+  var player = { x: WORLD / 2, y: WORLD / 2, r: 14, vx: 0, vy: 0 };
+  var eaten = 0;
+  var pointer = null;              // screen-space steering target
+  var keys = {};
 
-    <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
+  window.addEventListener("pointermove", function (e) { pointer = { x: e.clientX, y: e.clientY }; });
+  window.addEventListener("pointerdown", function (e) { pointer = { x: e.clientX, y: e.clientY }; });
+  window.addEventListener("keydown", function (e) { keys[e.key.toLowerCase()] = true; });
+  window.addEventListener("keyup", function (e) { keys[e.key.toLowerCase()] = false; });
 
-    <div id="modal" class="modal" hidden>
-      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <h2 id="modal-title">log in</h2>
-        <p class="hint" id="modal-hint">Log in to continue.</p>
-        <form id="modal-form" class="form">
-          <label>email <input name="email" type="email" autocomplete="username" required /></label>
-          <label>password <input name="password" type="password" autocomplete="current-password" required minlength="8" /></label>
-          <div class="row-btns">
-            <button type="submit" class="btn primary">continue</button>
-            <button type="button" class="btn" id="modal-cancel">cancel</button>
-          </div>
-        </form>
-        <p class="fine"><a href="#/register">create an account</a></p>
-      </div>
-    </div>
-  </div>
+  function step() {
+    // Steering: drift toward the pointer, or by keys when held.
+    var dx = 0, dy = 0;
+    if (keys["arrowleft"] || keys["a"]) dx -= 1;
+    if (keys["arrowright"] || keys["d"]) dx += 1;
+    if (keys["arrowup"] || keys["w"]) dy -= 1;
+    if (keys["arrowdown"] || keys["s"]) dy += 1;
+    if (dx === 0 && dy === 0 && pointer) {
+      dx = pointer.x - W / 2;
+      dy = pointer.y - H / 2;
+      var dead = 6;
+      if (Math.abs(dx) < dead && Math.abs(dy) < dead) { dx = 0; dy = 0; }
+    }
+    var len = Math.hypot(dx, dy);
+    var speed = Math.max(1.6, 4.4 - player.r * 0.028);   // bigger is slower
+    if (len > 0) {
+      var tx = (dx / len) * speed, ty = (dy / len) * speed;
+      player.vx += (tx - player.vx) * 0.08;
+      player.vy += (ty - player.vy) * 0.08;
+    } else {
+      player.vx *= 0.96; player.vy *= 0.96;
+    }
+    player.x = Math.max(player.r, Math.min(WORLD - player.r, player.x + player.vx));
+    player.y = Math.max(player.r, Math.min(WORLD - player.r, player.y + player.vy));
 
-    <script src="config.js?v=2"></script>
-  <script src="app.js?v=17" defer></script>
+    // Eating: overlap a pellet, grow a little, the void makes another.
+    for (var i = 0; i < pellets.length; i++) {
+      var p = pellets[i];
+      var ddx = p.x - player.x, ddy = p.y - player.y;
+      var rr = player.r + p.r * 0.4;
+      if (ddx * ddx + ddy * ddy < rr * rr) {
+        player.r = Math.sqrt(player.r * player.r + p.r * p.r * 0.55);
+        eaten++;
+        pellets[i] = newPellet();
+        sizeEl.textContent = Math.round(player.r * 2);
+        eatenEl.textContent = eaten;
+      }
+    }
+  }
+
+  function draw() {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    var zoom = Math.min(1, 26 / player.r * 0.55 + 0.45);  // ease out as you grow
+    var camX = player.x - W / 2 / zoom;
+    var camY = player.y - H / 2 / zoom;
+
+    // World edge, a faint square far out in the dark.
+    ctx.save();
+    ctx.scale(zoom, zoom);
+    ctx.translate(-camX, -camY);
+    ctx.strokeStyle = "rgba(255,255,255,0.07)";
+    ctx.lineWidth = 2 / zoom;
+    ctx.strokeRect(0, 0, WORLD, WORLD);
+
+    // Pellets in view.
+    for (var i = 0; i < pellets.length; i++) {
+      var p = pellets[i];
+      if (p.x < camX - 20 || p.y < camY - 20 || p.x > camX + W / zoom + 20 || p.y > camY + H / zoom + 20) continue;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = p.warm ? "rgba(255,196,110,0.9)" : "rgba(230,233,240,0.75)";
+      ctx.fill();
+    }
+
+    // The player: a soft light well with a bright core, the bjvfi glow.
+    var glow = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, player.r * 4.2);
+    glow.addColorStop(0, "rgba(255,255,255,0.20)");
+    glow.addColorStop(0.5, "rgba(255,255,255,0.05)");
+    glow.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r * 4.2, 0, Math.PI * 2);
+    ctx.fillStyle = glow;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+    ctx.fillStyle = "#F2F2F5";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r * 0.62, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function frame() {
+    step();
+    draw();
+    requestAnimationFrame(frame);
+  }
+  sizeEl.textContent = Math.round(player.r * 2);
+  requestAnimationFrame(frame);
+})();
+</script>
 </body>
 </html>

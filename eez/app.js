@@ -1050,6 +1050,17 @@ async function findUserByEmail(email){
   var em = String(email||'').trim().toLowerCase();
   return us.find(function(u){ return String(u.email||'').toLowerCase() === em && !u.deleted; }) || null;
 }
+async function findUserByUsername(username){
+  var us = await getUsers();
+  var un = String(username||'').trim().toLowerCase();
+  if(!un) return null;
+  return us.find(function(u){ return !u.deleted && (String(u.username||'').toLowerCase() === un || String(u.handle||'').toLowerCase() === un); }) || null;
+}
+async function findUserByLogin(login){
+  var byName = await findUserByUsername(login);
+  if(byName) return byName;
+  return findUserByEmail(login);
+}
 
 var imgUrlCache = {};
 async function resolveImageUrl(key){
@@ -1066,6 +1077,7 @@ async function publicUser(u){
   if(!u) return null;
   return {
     id: u.id,
+    username: u.username || '',
     email: u.email,
     handle: u.handle,
     why_here: u.why_here || '',
@@ -1412,20 +1424,20 @@ async function ghApi(path, opts){
   }
   if(p === '/api/auth/register' && method === 'POST'){
     var reg = json || {};
-    var email = String(reg.email || '').trim().toLowerCase();
+    var username = String(reg.username || '').trim().toLowerCase();
     var password = String(reg.password || '');
-    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw bad('enter a valid email');
+    if(!/^[a-z0-9_]{3,16}$/.test(username)) throw bad('pick a username: 3 to 16 characters, lowercase letters, numbers, underscore');
     if(password.length < 8) throw bad('password must be at least 8 characters');
     var whyH = String(reg.why_here || '').trim(), intoN = String(reg.into_now || '').trim(), askT = String(reg.ask_them || '').trim();
     if(!whyH || !intoN || !askT) throw bad('answer all three prompts');
-    var exists = await findUserByEmail(email);
-    if(exists) throw bad('that email is taken', 409);
+    var exists = await findUserByLogin(username);
+    if(exists) throw bad('that username is taken', 409);
     var hash = await pbkdf2Hash(password);
     var created;
     await mutateJson('users.json', function(us){
-      if(us.some(function(x){ return String(x.email||'').toLowerCase() === email && !x.deleted; })) throw bad('that email is taken', 409);
+      if(us.some(function(x){ return !x.deleted && (String(x.username||'').toLowerCase() === username || String(x.handle||'').toLowerCase() === username || String(x.email||'').toLowerCase() === username); })) throw bad('that username is taken', 409);
       created = {
-        id: newId(), email: email, handle: makeHandle(email, us), pass: hash,
+        id: newId(), username: username, email: '', handle: username, pass: hash,
         why_here: whyH.slice(0,500), into_now: intoN.slice(0,500), ask_them: askT.slice(0,500),
         quiet_mode: 0, stack_sort: 'active', theme_accent: 'default', theme_preset: '', theme_custom: '', theme_bg_key: '',
         digest_opt_in: 0, last_seen_at: nowS(), created_at: nowS()
@@ -1437,10 +1449,10 @@ async function ghApi(path, opts){
   }
   if(p === '/api/auth/login' && method === 'POST'){
     var lin = json || {};
-    var lu = await findUserByEmail(lin.email);
-    if(!lu) throw bad('wrong email or password', 401);
+    var lu = await findUserByLogin(lin.username || lin.email);
+    if(!lu) throw bad('wrong username or password', 401);
     var ok = await pbkdf2Verify(String(lin.password || ''), lu.pass);
-    if(!ok) throw bad('wrong email or password', 401);
+    if(!ok) throw bad('wrong username or password', 401);
     await touchSeen(lu);
     saveSession(lu.id);
     return {user: await publicUser(lu)};
@@ -2184,7 +2196,7 @@ var lastSendAt = 0;
       await api("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({
-          email: String(fd.get("email") || ""),
+          username: String(fd.get("username") || ""),
           password: String(fd.get("password") || ""),
         }),
       });
@@ -4322,7 +4334,7 @@ var lastSendAt = 0;
       <section class="settings-group">
         <h2>account</h2>
         <div class="settings-sub">
-          <p class="settings-email">${escapeHtml(u.email || "")}</p>
+          <p class="settings-email">${escapeHtml(u.username || u.handle || u.email || "")}</p>
           <div class="row-btns">
             <button class="btn ghost" type="button" id="logout">log out</button>
             <button class="btn danger ghost" type="button" id="delete-account">delete account</button>
@@ -4591,7 +4603,7 @@ var lastSendAt = 0;
     return `
       <h1>${kind === "register" ? "create account" : "log in"}</h1>
       <form id="auth-form" class="form">
-        <label>email <input name="email" type="email" autocomplete="username" required /></label>
+        <label>username <input name="username" type="text" autocomplete="username" required maxlength="16" /></label>
         <label>password <input name="password" type="password" autocomplete="${kind === "register" ? "new-password" : "current-password"}" required minlength="8" /></label>
         ${registerFields}
         <p id="auth-err" class="error" hidden></p>
@@ -4625,7 +4637,7 @@ var lastSendAt = 0;
       if (!restore) return; // already in flight — ignore the second tap
       const fd = new FormData(form);
       const err = document.getElementById("auth-err");
-      const payload = { email: fd.get("email"), password: fd.get("password") };
+      const payload = { username: fd.get("username"), password: fd.get("password") };
       if (kind === "register") {
         payload.why_here = fd.get("why_here");
         payload.into_now = fd.get("into_now");
