@@ -53,6 +53,13 @@
   .pips i.now{background:#fff;box-shadow:0 0 8px rgba(255,255,255,.8)}
   .pips[hidden]{display:none}
 
+  .wins{
+    position:absolute;top:14px;right:16px;z-index:5;pointer-events:none;
+    font-size:13px;font-weight:700;letter-spacing:.02em;
+    color:rgba(245,241,232,.85);
+  }
+  .wins b{color:var(--green);font-weight:900}
+
   /* Overlays: one line, one button, nothing else */
   .overlay{
     position:absolute;inset:0;z-index:4;
@@ -83,6 +90,8 @@
 <body>
 <main class="stage" id="stage">
   <canvas id="game"></canvas>
+
+  <div class="wins" id="wins">Wins <b>0</b></div>
 
   <div class="pips" id="pips" hidden></div>
 
@@ -121,6 +130,7 @@
   var overlayFail = document.getElementById('overlayFail');
   var overlayWin = document.getElementById('overlayWin');
   var failText = document.getElementById('failText');
+  var winsEl = document.getElementById('wins');
 
   var W = 0, H = 0, DPR = 1;
   function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
@@ -137,6 +147,7 @@
   var path = [];        // waypoint points; the last one is the destination
   var wpIndex = 0;      // which waypoint is lit now
   var level = 1;
+  var wins = 0;
   var elapsed = 0;
   var spawnTimer = 0;
   var shake = 0;
@@ -268,6 +279,8 @@
   }
   function win(){
     state = 'won'; soundWin();
+    wins++;
+    winsEl.innerHTML = 'Wins <b>' + wins + '</b>';
     var d = path[path.length-1];
     burst(d.x, d.y, '#8affc1', 30);
     burst(d.x, d.y, '#ffd166', 22);
