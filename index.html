@@ -431,9 +431,9 @@
     if(!path.length) return;
     // faint dotted route from where you are through the remaining lights
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,.10)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([2, 9]);
+    ctx.strokeStyle = 'rgba(255,255,255,.55)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([3, 6]);
     ctx.beginPath();
     ctx.moveTo(player.x, player.y);
     for(var i=wpIndex;i<path.length;i++) ctx.lineTo(path[i].x, path[i].y);
